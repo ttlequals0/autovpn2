@@ -18,7 +18,7 @@ region_choices = []
 for region, ami in region_to_ami.iteritems():
     region_choices.append(region)
 
-flags = dict.fromkeys(["create", "status"], False)
+flags = dict.fromkeys(["create", "status", "terminate"], False)
 
 # CLI arguments
 parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -94,7 +94,7 @@ def deploy_instance(target_region=args.region, keypair=args.keypair):
             ])
         print('Ingress Successfully Set %s' % data)
     except ClientError as e:
-        print(" here")
+        state = "1"
 
     # Create the ec2 instance and place in proper security group
     instance = ec2.create_instances(
@@ -120,9 +120,6 @@ def deploy_instance(target_region=args.region, keypair=args.keypair):
         ]
     )
 
-
-def terminate_instance():
-    '''placeholder'''
 
 def deploy_openvpn():
     '''placeholder'''
@@ -169,6 +166,19 @@ def check_instance(target_region=args.region):
     return(InstanceId, InstancePublicIP)
 
 
+def terminate_instance(target_region=args.region, ids=args.instance_id):
+    ec2 = boto3.resource('ec2', region_name=target_region)
+
+    termids = []
+    termids.append(ids)
+    # Terminate ec2 instance
+    try:
+        ec2.instances.filter(InstanceIds=termids).terminate()
+        print("Success! Instance %s has been terminated in %s." % (termids[0], target_region))
+    except:
+        print("Failure. Instance %s has not been terminated in %s please check status." % (termids[0], target_region) )
+
+
 def create_keypair():
     '''placeholder'''
 
@@ -185,4 +195,6 @@ if flags['create']:
     deploy_instance()
 if flags['status']:
     InstanceId, InstancePublicIP = check_instance()
-    print("Instance Id:%s Public IP:%s" % (InstanceId, InstancePublicIP))
+    print("Instance-Id: %s Public-IP: %s" % (InstanceId, InstancePublicIP))
+if flags['terminate']:
+    terminate_instance()
