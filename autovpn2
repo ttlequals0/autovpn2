@@ -75,7 +75,7 @@ def deploy_instance(target_region=args.region, keypair=args.keypair):
             ami_id = ami
 
     ec2 = boto3.resource('ec2', region_name=target_region)
-    client = boto3.client('ec2')
+    client = boto3.client('ec2', region_name=target_region)
 
     # Create Security Group Allowing SSH and OpenVPN
     try:
@@ -128,44 +128,57 @@ def deploy_instance(target_region=args.region, keypair=args.keypair):
     deploy_openvpn(target_region, new_instance[0])
 
 
-def deploy_openvpn(region, instanceid):
+def deploy_openvpn(target_region, instanceid):
     port = 22
     # Regex to check for valid IP
     ippattern = re.compile("^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$")
 
     # Get instance Ip and make sure its valid
     try:
-        RInstanceId, InstancePublicIP = check_instance(region)
+        RInstanceId, InstancePublicIP = check_instance(target_region)
         if not ippattern.match(InstancePublicIP):
             raise
         else:
             host = InstancePublicIP
             print("New instance IP is %s" % (host))
     except:
-        time.slepp(10)
-        RInstanceId, InstancePublicIP = check_instance(region)
+        time.sleep(10)
+        RInstanceId, InstancePublicIP = check_instance(target_region)
         if ippattern.match(InstancePublicIP):
             host = InstancePublicIP
         else:
             print("Looks like something bad happened. Delete instance and try again.")
 
     # Test to see if ec2 instance is reachable over ssh
-    print(host)
-    print(instanceid, RInstanceId)
+
     if instanceid == RInstanceId:
-        testhost = paramiko.transport.Transport('%s:%s' % (host, port))
-        testhost.start_client()
-        key = testhost.get_remote_server_key()
+        key = None
+        i = 0
+        while key == None:
+            if i >= 30:
+                print(
+                    'Took too long to deploy instance, please delete it and try again.')
+                sys.exit(1)
+            try:
+                testhost = paramiko.transport.Transport('%s:%s' % (host, port))
+                testhost.start_client()
+                key = testhost.get_remote_server_key()
+            except:
+                print('Instance is still booting up!')
+            i += 1
 
         server = '[%s]:%s' % (host, port)
         print('%s %s %s' % (server, key.get_name(), key.get_base64()))
     else:
-        print('fail')
+        pass
+        print(
+            'Instance ID isn\'t valid, please deltee all instances in region and try again.')
 
 
 def check_instance(target_region=args.region):
+
     ec2 = boto3.resource('ec2', region_name=target_region)
-    client = boto3.client('ec2')
+    client = boto3.client('ec2', region_name=target_region)
 
     # Create filter for power state and tag
     idfilters = [
@@ -198,7 +211,7 @@ def check_instance(target_region=args.region):
             for i in r['Instances']:
                 InstancePublicIP = (i['PublicIpAddress'])
     except:
-        print("There are no instances runnting in %s" % (target_region))
+        print("There are no instances running in %s" % (target_region))
         sys.exit()
     # Return Instance ID and Public IP address
     return(InstanceId, InstancePublicIP)
